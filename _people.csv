@@ -1,0 +1,24 @@
+Name,Gender,Marital_Status,Wants to sit next to,Must not sit next to
+Brittany,Female,Single,,
+Paul,Male,Single,,
+Bryan,Male,Single,Chad,Angela
+Kristen,Female,Single,,
+Christopher,Male,Single,,
+Brian,Male,Single,,
+Tracy,Male,Single,,
+Michael,Male,Married to Angela,,
+Angela,Female,Married to Michael,,
+Evan,Male,Married to Nicole,,
+Nicole,Female,Married to Evan,Kim,James
+Jack,Male,Married to Mark,,
+Mark,Male,Married to Jack,,
+James,Male,Married to Preston,,
+Preston,Male,Married to James,,
+Charles,Male,Married to Kim,,
+Kim,Female,Married to Charles,Angela,Kathy
+Jeffrey,Male,Married to John,,
+John,Male,Married to Jeffrey,,
+Sarah,Female,Married to Christina,,
+Christina,Female,Married to Sarah,,
+Kathy,Female,Married to Chad,Chad,Sarah
+Chad,Male,Married to Kathy,,

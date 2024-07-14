@@ -1,0 +1,40 @@
+Name,Gender,Marital_Status,Wants to sit next to,Must not sit next to
+Nick Ellison,Male,Married to Charlotte Ellison,,
+Charlotte Ellison,Female,Married to Nick Ellison,,John Ellison
+Harriet Collings,Female,Married to Phillip Mittasch,,John Ellison
+Phillip Mittasch,Male,Married to Harriet Collings,,
+Frank Collings,Male,Married to Mrs Frank Collings,,John Ellison
+Joe Collings,Male,Single,,John Ellison
+Craig Collings,Male,Married to Sarah Collings,,Sylvia Webster
+Sarah Collings,Female,Married to Craig Collings,,John Ellison
+Mrs Frank Collings,Female,Married to Frank Collings,,Oonagh Fawcett Wood
+Natasha Nixon,Female,Single,,
+Oonagh Fawcett Wood,Female,Single,,
+Emilie Maestre,Female,Single,,
+Nima Safaei,Male,Single,,Alex Wise
+Justine Steele,Female,Married to Mr Justine,,
+Sue Mattick,Female,Married to Paul Mattick,,
+Paul Mattick,Male,Married to Sue Mattick,,
+Mr Justine,Male,Married to Justine Steele,,
+Rob Wise,Male,Married to Alex Wise,,
+Alex Wise,Female,Married to Rob Wise,,Nima Safaei
+Sam Atkins,Male,Married to Sneha Atkins,,
+Sneha Atkins,Female,Married to Sam Atkins,,
+Rob Tanna Smith,Male,Married to Ups Tanna Smith,,
+Ups Tanna Smith,Female,Married to Rob Tanna Smith,,
+Charlie Hogg,Male,Married to Keeley Hogg,,Alex Wise
+Keeley Hogg,Female,Married to Charlie Hogg,,
+James Clark,Male,Married to Mary Clark,,
+Mary Clark,Female,Married to James Clark,,
+Will Frampton,Male,Single,,
+John Ellison,Male,Married to Sylvia Webster,,
+Sylvia Webster,Female,Married to John Ellison,,
+Tim Ellison,Male,Married to Daisy Ellison,,
+Daisy Ellison,Female,Married to Tim Ellison,,
+Steph Ironside,Female,Married to Peter Ironside,,
+Peter Ironside,Male,Married to Steph Ironside,,
+James RB,Male,Married to Rachael RB,,
+Rachael RB,Female,Married to James RB,,
+Luke Roberts,Male,Married to Susan Roberts,,
+Susan Roberts,Female,Married to Luke Roberts,,
+Nicola,Female,Single,,
