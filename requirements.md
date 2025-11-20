@@ -2,109 +2,175 @@
 
 ## 1. Purpose
 
-This tool automatically generates optimised seating plans for events (weddings, dinners, corporate functions) using constraints such as:
-- who must not sit together
-- who prefers to sit together
-- couples
-- gender balance
-- clustering singles
-- table sizes and layouts
+This system generates optimised seating plans for events (weddings, corporate dinners, galas, conferences) using constraint-based logic. It reduces manual effort and resolves social/political seating challenges intelligently.
 
-The goal is to reduce manual seating effort and resolve social / political seating challenges intelligently.
+Key advantages:
+
+- Avoids seating conflicts (ex-partners, politics, family drama)
+- Optimises social outcomes (singles together, VIP clustering, networking)
+- Automates large events dramatically faster than manual planning
 
 ---
 
 ## 2. Users & Use Cases
 
 ### Primary Users
-- People planning weddings or large dinners
-- Event planners / coordinators
+- Wedding planners / venue coordinators
+- Couples planning their own wedding
 - Corporate event organisers
+- Banqueting & hospitality managers
 
-### Example Scenarios
+### Use Case Examples
+
 | Scenario | User | Goal |
 |----------|------|------|
-| Wedding couple uploads guest list to auto-seat 150 guests | Bride / groom | Reduce stress & bias |
-| HR team seats 300 delegates by department | Corporate | Mix teams & executives |
-| Mother-of-the-bride enforces tensions | Family stakeholder | Avoid conflict |
+| Seating 250 guests at a wedding | Bride & groom | Reduce stress, avoid family politics |
+| Conference seating 400 by department | Corporate events team | Facilitate networking |
+| Diplomatic banquet | Government protocol staff | Avoid adversarial pairings |
+| Family reunion | Host | Group similar interests; reduce manual effort |
+
+### Future Vertical Opportunities
+- Indian weddings (very large tables, complex relationships)
+- University formals & college halls
+- Political, military, royalty protocol seating
+- Cruise ships / onboard dining assignment
+- Matchmaking / singles events
 
 ---
 
 ## 3. Core Features (MVP)
 
-### **3.1 Data Input**
-- Upload guest list via CSV
-- Manual entry in UI
-- Validate missing names, gender, marital status
+### 3.1 Data Input
+- Upload guest list (CSV)
+- Manual entry form
+- Validation for missing gender, relationship data, duplicates
 
-### **3.2 Seating Logic**
-- Support circular + trestle tables
-- Configurable number of tables and capacities
-- Automatic seating generation based on scoring
+### 3.2 Table Layout Support
+- Round tables
+- Trestle / banquet (linear)
+- Configurable number of tables & capacity
 
-### **3.3 Constraints**
-| Type | Example |
-|------|---------|
-| Hard ("must not") | X not next to Y |
-| Soft ("wants") | X prefers Y |
-| Relationship-aware | Keep couples together / apart |
-| Singles clustering | Increase adjacent single pairs |
-| Gender alternation | Prefer M-F alternation but not required |
+### 3.3 Seating Logic & Constraints
 
-### **3.4 Output**
-- Visual seating plan (rendered tables)
-- Export as PDF + CSV
-- Console / debug output
-- Summary metrics
+| Constraint Type | Example |
+|----------------|---------|
+| Hard (must not) | John must not sit next to Sarah |
+| Soft (wants) | Nick prefers to sit next to Charlotte |
+| Relationship-aware | Married couples together or apart |
+| Singles clustering | Pairs singles to encourage mingling |
+| Gender balance | Alternation preferred, not required |
+| Groups / tags | Company, family, region, interests |
 
 ---
 
-## 4. Objective Function (Scoring Priorities)
+## 4. Scoring & Objective Function
 
-Current priority order:
+Priority order:
 
-1. **Minimise must-not violations**
-2. **Maximise wants satisfied**
-3. **Maximise adjacent singles**
-4. **Maximise alternating tables**
-5. **Maximise split couples** *(optional — may change to minimise)*
+1. Minimise must-not violations (hard constraint)
+2. Maximise wants satisfied
+3. Maximise adjacent singles
+4. Maximise alternating tables
+5. Configurable: minimise or maximise split couples
 
-### Planned Enhancements
-- Add weight sliders for each objective
-- Allow toggling goals per event type (e.g. corporate vs wedding)
+### Future Enhancements
+- Weight sliders per constraint
+- Scoring presets (Wedding, Corporate, Diplomatic, Singles Mixer)
+- Genetic or annealing optimisation
 
 ---
 
-## 5. Non-Functional Requirements
+## 5. Data Model (Conceptual)
+
+Each guest record may include:
+
+- id (unique identifier)
+- name
+- gender
+- relationship descriptor (e.g., Married to Nick)
+- wants_to_sit_next_to (list of IDs)
+- must_not_sit_next_to (list of IDs)
+- tags (family, company, VIP, dietary)
+
+The representation can be stored in JSON, CSV, or DB schema.
+
+---
+
+## 6. Non-Functional Requirements
 
 | Requirement | Target |
 |-------------|--------|
-| Performance | Solve 200 guests in <5s |
-| Platform | Web-first; mobile companion later |
-| Data Privacy | No public indexing; deletable event data |
-| Determinism | Seeding options to reproduce results |
+| Performance | 300 guests solved in under 10 seconds |
+| Determinism | Seeded runs produce reproducible results |
+| Privacy | Full data deletion; no public indexing |
+| Deployment | Web-first; containerised backend |
+| Exportability | JSON, CSV, PDF |
+| UX | Solver-first; manual override secondary |
 
 ---
 
-## 6. Technical Design (Initial Concept)
+## 7. Technical Architecture (Phased)
 
-### **Backend**
-- Python (FastAPI)
-- Seat solver as standalone service
-- Future: GA / simulated annealing instead of random attempts
+### Phase 1 — Solver Module
+- Pure Python
+- JSON in → JSON out
+- CLI for local execution
 
-### **Frontend**
-- React / Next.js
-- Canvas-based drag-and-drop (Konva.js or Fabric.js)
-- Real-time preview of score changes
+### Phase 2 — Solver API
+- FastAPI backend
+- /solve endpoint returns seating + metrics
 
-### **Data Model**
-```json
-{
-  "name": "Charlotte Ellison",
-  "gender": "Female",
-  "marital_status": "Married to Nick Ellison",
-  "wants": ["Nick Ellison"],
-  "must_not": ["John Ellison"],
-  "tags": ["family", "top table", "vegan"]
-}
+### Phase 3 — UI
+- React/Next.js
+- Drag-and-drop tables
+- Live scoring updates
+
+### Phase 4 — Persistence
+- Save events, revisions, exports
+- User accounts + auth
+
+### Phase 5 — Collaboration
+- Shareable links
+- Role-based edits
+- Change audit log
+
+---
+
+## 8. Future Extensions
+
+| Feature | Motivation |
+|---------|------------|
+| Personality / interest clustering | Group compatible guests |
+| Corporate networking mode | Auto-distribute professional groups |
+| Venue system integration | Export directly to banqueting software |
+| Drama mode | Sit problematic pairs together |
+| Actual seat-number mapping | Match plan to physical chairs |
+
+---
+
+## 9. Risks & Mitigations
+
+| Risk | Mitigation |
+|------|------------|
+| Constraints unsatisfiable | Provide conflict report & fallback plan |
+| UI complexity | Build solver-first, add UI second |
+| Competing apps | Differentiate via optimisation engine |
+| Manual data entry overhead | Bulk import, auto-tagging, templates |
+
+---
+
+## 10. Commercial Strategy
+
+| Market | Value | Customers |
+|--------|-------|-----------|
+| Weddings | High emotional + willingness to pay | Planners, venues, couples |
+| Corporate events | Large recurring scale | Businesses, agencies |
+| Universities | High volume, low ARPU | Student unions, halls |
+| Diplomacy | Precision + protocol | Embassies, gov departments |
+
+Business model options:
+
+- SaaS subscription for planners
+- Per-event pricing for individuals
+- Licensing to venue/event software
+- API access for enterprise workflows
