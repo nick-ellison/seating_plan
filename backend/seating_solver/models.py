@@ -11,7 +11,8 @@ class Guest:
     marital_status: Optional[str] = None
     wants_to_sit_next_to: List[str] = field(default_factory=list)  # list of guest IDs
     must_not_sit_next_to: List[str] = field(default_factory=list)  # list of guest IDs
-    # tags / extra fields can go in here later
+    tags: List[str] = field(default_factory=list)                  # e.g. ["family", "VIP"]
+    attributes: Dict[str, Any] = field(default_factory=dict)       # arbitrary metadata
 
 
 @dataclass
@@ -70,6 +71,8 @@ def guest_from_dict(d: Dict[str, Any]) -> Guest:
         marital_status=d.get("maritalStatus"),
         wants_to_sit_next_to=d.get("wantsToSitNextTo", []),
         must_not_sit_next_to=d.get("mustNotSitNextTo", []),
+        tags=d.get("tags", []),
+        attributes=d.get("attributes", {}),
     )
 
 

@@ -1,3 +1,4 @@
+# seating_solver/solver.py
 from __future__ import annotations
 
 import random
@@ -10,6 +11,7 @@ from .models import (
     SeatingMetrics,
     GuestSeat,
     TableSeating,
+    Weights,
 )
 
 
@@ -24,7 +26,11 @@ def is_married_to(p1: Guest, p2: Guest) -> bool:
     return (f"Married to {p2.name}" in ms1) or (f"Married to {p1.name}" in ms2)
 
 
-def build_table_seating(males: List[Guest], females: List[Guest], table_size: int) -> Optional[List[Guest]]:
+def build_table_seating(
+    males: List[Guest],
+    females: List[Guest],
+    table_size: int,
+) -> Optional[List[Guest]]:
     """
     Build a single table's seating from shared male/female pools, trying to keep
     a reasonable gender balance and alternating where possible.
@@ -55,10 +61,10 @@ def build_table_seating(males: List[Guest], females: List[Guest], table_size: in
         ideal_females = min(table_size - ideal_males, len(females))
 
     if ideal_males + ideal_females < table_size:
-        # Still short; greedily fill from larger pool
+        # Still short; greedily fill from the larger pool
         needed = table_size - (ideal_males + ideal_females)
         for _ in range(needed):
-            if len(males) >= len(fememales := females) and males:
+            if len(males) >= len(females) and males:
                 ideal_males += 1
             elif females:
                 ideal_females += 1
@@ -192,7 +198,7 @@ def scoring_tuple(
     adjacent_singles: int,
 ) -> tuple:
     """
-    Priority order:
+    Priority order (wedding_default profile):
       1. Minimise must-not violations
       2. Maximise wants satisfied
       3. Maximise adjacent singles
@@ -215,15 +221,40 @@ def scoring_tuple(
 def solve(
     guests: List[Guest],
     tables: List[Table],
+    profile: str = "wedding_default",
+    weights: Optional[Weights] = None,
     max_attempts: int = 1000,
     seed: Optional[int] = None,
 ) -> SeatingPlan:
     """
     Core solver entrypoint.
-    Takes Guests + Tables and returns a SeatingPlan using a random-search
-    heuristic similar to your script10.
+
+    Parameters
+    ----------
+    guests : list[Guest]
+        All guests to be seated.
+    tables : list[Table]
+        Available table configurations.
+    profile : str
+        Name of the seating profile to use. For now only "wedding_default"
+        is implemented; this argument exists so other profiles can be added
+        later without changing the signature.
+    weights : Weights | None
+        Optional constraint weights; currently not used to alter the scoring
+        function, but included for future tuning.
+    max_attempts : int
+        Maximum number of random seating attempts to evaluate.
+    seed : int | None
+        Random seed for reproducible runs.
+
+    Returns
+    -------
+    SeatingPlan
+        Best seating plan found within max_attempts.
     """
 
+    # For now, `profile` and `weights` do not alter behaviour. All logic is the
+    # "wedding_default" profile. Later we can branch on `profile`.
     if seed is not None:
         random.seed(seed)
 
@@ -302,7 +333,7 @@ def solve(
         split_couples = sum(
             count_split_couples(s1, s2)
             for i, s1 in enumerate(seatings)
-            for s2 in seatings[i + 1 :]
+            for s2 in seatings[i + 1:]
         )
         alternating_tables_count = sum(
             1 for s in seatings if valid_alternating_seating(s)

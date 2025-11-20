@@ -28,6 +28,12 @@ def main(argv: List[str] | None = None) -> None:
         default=None,
         help="Random seed for reproducible runs",
     )
+    parser.add_argument(
+        "--profile",
+        type=str,
+        default="wedding_default",
+        help='Seating profile name (default: "wedding_default")',
+    )
     args = parser.parse_args(argv)
 
     # Read JSON input
@@ -42,7 +48,14 @@ def main(argv: List[str] | None = None) -> None:
     guests = [guest_from_dict(g) for g in payload["guests"]]
     tables = [table_from_dict(t) for t in payload["tables"]]
 
-    plan = solve(guests, tables, max_attempts=args.max_attempts, seed=args.seed)
+    # NOTE: weights not wired yet – we can lift from payload later if needed.
+    plan = solve(
+        guests,
+        tables,
+        profile=args.profile,
+        max_attempts=args.max_attempts,
+        seed=args.seed,
+    )
     out = seating_plan_to_dict(plan)
 
     json.dump(out, sys.stdout, indent=2)
