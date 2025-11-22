@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import random
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Mapping
 
 from .models import (
     Guest,
@@ -12,6 +12,18 @@ from .models import (
     GuestSeat,
     TableSeating,
     Weights,
+)
+
+# -------------------------
+# Default weights
+# -------------------------
+
+DEFAULT_WEIGHTS = Weights(
+    must_not=100,
+    wants=10,
+    adjacent_singles=5,
+    alternating=2,
+    split_couples=1,
 )
 
 
@@ -94,17 +106,27 @@ def build_table_seating(
 
 
 def ensure_no_adjacent_couples(table: List[Guest]) -> List[Guest]:
-    """Try to rearrange a single table so no married couples sit adjacent (circular)."""
+    """
+    Try to rearrange a single table so no married couples sit adjacent (circular),
+    UNLESS they explicitly want to sit together.
+    """
     n = len(table)
     for i in range(n):
-        if is_married_to(table[i], table[(i + 1) % n]):
-            for j in range(2, n):
-                a = (i + j) % n
-                b = (i + j + 1) % n
+        j = (i + 1) % n
+        if is_married_to(table[i], table[j]):
+            # If they explicitly want to sit together, respect that
+            wants_i = table[i].wants_to_sit_next_to or []
+            wants_j = table[j].wants_to_sit_next_to or []
+            if table[j].id in wants_i or table[i].id in wants_j:
+                continue
+
+            # Otherwise, try to separate them
+            for k in range(2, n):
+                a = (i + k) % n
+                b = (i + k + 1) % n
                 if (not is_married_to(table[i], table[a]) and
-                        not is_married_to(table[(i + 1) % n], table[b])):
-                    # swap
-                    table[(i + 1) % n], table[a] = table[a], table[(i + 1) % n]
+                        not is_married_to(table[j], table[b])):
+                    table[j], table[a] = table[a], table[j]
                     break
     return table
 
@@ -196,21 +218,53 @@ def scoring_tuple(
     alternating_score: int,
     split_couples: int,
     adjacent_singles: int,
+    weights: Weights,
 ) -> tuple:
     """
-    Priority order (wedding_default profile):
-      1. Minimise must-not violations
-      2. Maximise wants satisfied
-      3. Maximise adjacent singles
-      4. Maximise alternating tables
-      5. Maximise split couples
+    Weighted scoring (wedding_default profile).
+
+    Weights:
+      - must_not        → penalty for violations    (higher = harsher)
+      - wants           → reward for satisfied wants
+      - adjacent_singles→ reward
+      - alternating     → reward
+      - split_couples   → reward (or set to 0 to ignore)
     """
     return (
-        must_not_violations,      # minimise
-        -wants_score,             # maximise
-        -adjacent_singles,        # maximise
-        -alternating_score,       # maximise
-        -split_couples,           # maximise
+        # minimise weighted must-not violations
+        weights.must_not * must_not_violations,
+        # then maximise others (negative because smaller tuple is "better")
+        -weights.wants * wants_score,
+        -weights.adjacent_singles * adjacent_singles,
+        -weights.alternating * alternating_score,
+        -weights.split_couples * split_couples,
+    )
+
+
+def normalise_weights(weights_input: Optional[Mapping[str, float]]) -> Weights:
+    """
+    Convert the API weights dict (with keys like `mustNotWeight`) into
+    the internal Weights dataclass.
+
+    If None or empty, fall back to DEFAULT_WEIGHTS.
+    """
+    if not weights_input:
+        return DEFAULT_WEIGHTS
+
+    return Weights(
+        must_not=int(weights_input.get("mustNotWeight", DEFAULT_WEIGHTS.must_not)),
+        wants=int(weights_input.get("wantsWeight", DEFAULT_WEIGHTS.wants)),
+        adjacent_singles=int(
+            weights_input.get("adjacentSinglesWeight", DEFAULT_WEIGHTS.adjacent_singles)
+        ),
+        # We don't currently have a separate same-gender weight in Weights;
+        # you can wire that in later if you want it to affect core scoring.
+        alternating=int(
+            weights_input.get("alternatingTablesWeight", DEFAULT_WEIGHTS.alternating)
+        ),
+        split_couples=int(
+            weights_input.get("splitCouplesWeight", DEFAULT_WEIGHTS.split_couples)
+        ),
     )
 
 
@@ -222,41 +276,21 @@ def solve(
     guests: List[Guest],
     tables: List[Table],
     profile: str = "wedding_default",
-    weights: Optional[Weights] = None,
+    weights: Optional[Dict[str, float]] = None,
     max_attempts: int = 1000,
     seed: Optional[int] = None,
 ) -> SeatingPlan:
     """
     Core solver entrypoint.
 
-    Parameters
-    ----------
-    guests : list[Guest]
-        All guests to be seated.
-    tables : list[Table]
-        Available table configurations.
-    profile : str
-        Name of the seating profile to use. For now only "wedding_default"
-        is implemented; this argument exists so other profiles can be added
-        later without changing the signature.
-    weights : Weights | None
-        Optional constraint weights; currently not used to alter the scoring
-        function, but included for future tuning.
-    max_attempts : int
-        Maximum number of random seating attempts to evaluate.
-    seed : int | None
-        Random seed for reproducible runs.
-
-    Returns
-    -------
-    SeatingPlan
-        Best seating plan found within max_attempts.
+    `weights` is expected to be a dict from the API (keys like mustNotWeight).
     """
 
-    # For now, `profile` and `weights` do not alter behaviour. All logic is the
-    # "wedding_default" profile. Later we can branch on `profile`.
     if seed is not None:
         random.seed(seed)
+
+    # Normalise weights dict -> Weights dataclass
+    effective_weights = normalise_weights(weights)
 
     total_capacity = sum(t.capacity for t in tables)
     if len(guests) > total_capacity:
@@ -325,7 +359,7 @@ def solve(
         if not success:
             continue
 
-        # Apply couple separation heuristic
+        # Apply couple separation heuristic (but respect explicit "wants")
         seatings = [ensure_no_adjacent_couples(s) for s in seatings]
 
         # Compute metrics
@@ -348,6 +382,7 @@ def solve(
             alternating_tables_count,
             split_couples,
             total_adjacent_singles,
+            effective_weights,
         )
 
         if best_score is None or current_score < best_score:

@@ -59,6 +59,8 @@ class Weights:
     adjacent_singles: int = 5
     alternating: int = 2
     split_couples: int = 1
+    # NEW — soft penalty for seating married couples together
+    adjacent_couples: int = 0
 
 
 # Helper functions to convert from/to primitive dicts for JSON

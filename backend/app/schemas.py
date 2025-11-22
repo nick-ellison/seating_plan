@@ -20,12 +20,24 @@ class TableIn(BaseModel):
     capacity: int
 
 
+# ⭐ NEW — weight configuration passed from frontend
+class WeightConfig(BaseModel):
+    mustNot: float = 100.0
+    wants: float = 10.0
+    adjacentSingles: float = 5.0
+    alternating: float = 2.0
+    splitCouples: float = 1.0
+    adjacentCouples: float = 0.0   # new weight introduced in solver
+
 class GenerateRequest(BaseModel):
     guests: List[GuestIn]
     tables: List[TableIn]
     profile: str = "wedding_default"
     maxAttempts: int = 1000
     seed: Optional[int] = None
+
+    # ⭐ NEW — optional for older clients, supports your UI sliders
+    weights: Optional[WeightConfig] = None
 
 
 class SeatOut(BaseModel):

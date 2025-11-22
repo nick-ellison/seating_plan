@@ -8,18 +8,19 @@ from seating_solver.solver import solve, seating_plan_to_dict
 from app.schemas import (
     GenerateRequest,
     SeatingPlanOut,
-    CsvImportResponse
+    CsvImportResponse,
 )
 from app.converters import (
     guest_in_to_solver,
     table_in_to_solver,
-    seating_plan_dict_to_out
+    seating_plan_dict_to_out,
 )
 from app.importers.wedding_csv import parse_wedding_csv
 
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 tags_metadata = [
     {"name": "health", "description": "Health and status checks."},
@@ -54,6 +55,7 @@ app.add_middleware(
 # Endpoints
 # -----------------------------
 
+
 @app.get("/api/health", tags=["health"])
 def health() -> dict:
     return {"status": "ok"}
@@ -61,8 +63,48 @@ def health() -> dict:
 
 @app.post("/api/seating/generate", response_model=SeatingPlanOut, tags=["seating"])
 def generate_seating(req: GenerateRequest) -> SeatingPlanOut:
+    """
+    Generate an optimised seating plan.
+
+    Expects:
+      - guests: List[GuestIn]
+      - tables: List[TableIn]
+      - profile: str (e.g. "wedding_default")
+      - maxAttempts: int
+      - seed: Optional[int]
+      - weights: Optional[WeightConfig]
+          • mustNot
+          • wants
+          • adjacentSingles
+          • alternating
+          • splitCouples
+          • adjacentCouples
+    """
     solver_guests = [guest_in_to_solver(g) for g in req.guests]
     solver_tables = [table_in_to_solver(t) for t in req.tables]
+
+    # Map camelCase WeightConfig → snake_case dict used by the solver
+    weights_dict = None
+    if getattr(req, "weights", None) is not None:
+        w = req.weights
+        weights_dict = {
+            "must_not": w.mustNot,
+            "wants": w.wants,
+            "adjacent_singles": w.adjacentSingles,
+            "alternating": w.alternating,
+            "split_couples": w.splitCouples,
+            "adjacent_couples": w.adjacentCouples,
+        }
+
+    logger.debug(
+        "Generating seating plan",
+        extra={
+            "profile": req.profile,
+            "max_attempts": req.maxAttempts,
+            "seed": req.seed,
+            "weights": weights_dict,
+        },
+    )
 
     try:
         plan = solve(
@@ -71,6 +113,7 @@ def generate_seating(req: GenerateRequest) -> SeatingPlanOut:
             profile=req.profile,
             max_attempts=req.maxAttempts,
             seed=req.seed,
+            weights=weights_dict,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -78,14 +121,21 @@ def generate_seating(req: GenerateRequest) -> SeatingPlanOut:
     return seating_plan_dict_to_out(seating_plan_to_dict(plan))
 
 
-@app.post("/api/guests/import-csv",
-          response_model=CsvImportResponse,
-          tags=["csv"])
+@app.post(
+    "/api/guests/import-csv",
+    response_model=CsvImportResponse,
+    tags=["csv"],
+)
 async def import_guests_csv(
     file: UploadFile = File(...),
     profile: str = "wedding_default",
 ) -> CsvImportResponse:
+    """
+    Import guests from a profile-specific CSV.
 
+    Currently only supports:
+      - profile = "wedding_default"
+    """
     if profile != "wedding_default":
         raise HTTPException(
             status_code=400,

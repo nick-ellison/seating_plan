@@ -42,6 +42,26 @@ type TableConfig = {
   capacity?: number;
 };
 
+// NEW: Weights type for optimisation controls
+type Weights = {
+  mustNotWeight: number;
+  wantsWeight: number;
+  adjacentSinglesWeight: number;
+  sameGenderAdjWeight: number;
+  alternatingTablesWeight: number;
+  splitCouplesWeight: number;
+};
+
+// NEW: default weights
+const DEFAULT_WEIGHTS: Weights = {
+  mustNotWeight: 10,
+  wantsWeight: 5,
+  adjacentSinglesWeight: 3,
+  sameGenderAdjWeight: 3,
+  alternatingTablesWeight: 2,
+  splitCouplesWeight: 8,
+};
+
 const API_BASE_URL = "http://127.0.0.1:8000";
 
 const SAMPLE_GUESTS_AND_TABLES = {
@@ -106,6 +126,46 @@ function isSeatingPlanResponse(data: any): data is SeatingPlanResponse {
   );
 }
 
+// NEW: reusable slider row for weights
+type SliderProps = {
+  label: string;
+  description?: string;
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  onChange: (value: number) => void;
+};
+
+const WeightSliderRow: React.FC<SliderProps> = ({
+  label,
+  description,
+  value,
+  min = 0,
+  max = 10,
+  step = 1,
+  onChange,
+}) => (
+  <div className="space-y-1">
+    <div className="flex items-center justify-between">
+      <span className="text-xs font-medium text-slate-200">{label}</span>
+      <span className="text-[11px] text-teal-300 font-mono">{value}</span>
+    </div>
+    {description && (
+      <p className="text-[11px] text-slate-500 mb-1">{description}</p>
+    )}
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className="w-full accent-teal-400"
+    />
+  </div>
+);
+
 export default function HomePage() {
   const [profile, setProfile] = useState<string>("wedding_default");
   const [maxAttempts, setMaxAttempts] = useState<string>("1000");
@@ -122,10 +182,15 @@ export default function HomePage() {
   const [csvWarnings, setCsvWarnings] = useState<string[]>([]);
   const [csvLoading, setCsvLoading] = useState<boolean>(false);
 
+  // NEW: optimisation weights
+  const [weights, setWeights] = useState<Weights>(DEFAULT_WEIGHTS);
+
   // NEW: editable table configuration GUI
   const [tablesConfig, setTablesConfig] = useState<TableConfig[] | null>(
     SAMPLE_GUESTS_AND_TABLES.tables as TableConfig[]
   );
+
+  const resetWeights = () => setWeights(DEFAULT_WEIGHTS);
 
   // Map of guests for the visual layout
   const guestsById = useMemo(() => {
@@ -170,6 +235,7 @@ export default function HomePage() {
     setImportedGuests(null);
     setCsvWarnings([]);
     setTablesConfig(SAMPLE_GUESTS_AND_TABLES.tables as TableConfig[]);
+    setWeights(DEFAULT_WEIGHTS);
   };
 
   const handleGenerate = async () => {
@@ -205,6 +271,8 @@ export default function HomePage() {
         profile,
         maxAttempts: maxAttemptsNumber,
         seed: seedValue,
+        // NEW: send weights to backend
+        weights,
       };
 
       const res = await fetch(`${API_BASE_URL}/api/seating/generate`, {
@@ -458,12 +526,12 @@ export default function HomePage() {
               <p className="text-sm text-slate-400">
                 Use this internal tool to exercise the ArrangeIQ solver
                 profiles. Paste guests/tables JSON, tweak parameters, import
-                real CSVs, and inspect metrics.
+                real CSVs, tune weights and inspect metrics.
               </p>
             </div>
             <div className="text-xs text-slate-400 md:text-right">
-              <div>Profile-driven · Seeded · Deterministic</div>
-              <div>Designed for future multi-profile optimisation</div>
+              <div>Profile-driven · Seeded · Weighted</div>
+              <div>Designed for multi-profile optimisation</div>
             </div>
           </div>
         </section>
@@ -529,6 +597,83 @@ export default function HomePage() {
             <p className="text-[11px] text-slate-500">
               Use the same seed to reproduce a given seating plan.
             </p>
+          </div>
+        </section>
+
+        {/* NEW: Weights / optimisation controls */}
+        <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-100">
+                Optimisation weights
+              </h2>
+              <p className="text-[11px] text-slate-500">
+                Tune how strongly the solver cares about each constraint. Higher
+                values make a constraint more important. Weights are sent with
+                the current <code className="text-teal-300">profile</code> to
+                the API.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={resetWeights}
+              className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-950 hover:border-teal-400 hover:text-teal-300 transition-colors"
+            >
+              Reset weights
+            </button>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <WeightSliderRow
+              label="Must-not violations"
+              description="Penalty for seating guests next to people they must not sit with."
+              value={weights.mustNotWeight}
+              onChange={(v) =>
+                setWeights((w) => ({ ...w, mustNotWeight: v }))
+              }
+              min={5}
+              max={20}
+            />
+            <WeightSliderRow
+              label="Wants satisfied"
+              description="Reward for honouring 'wants to sit next to' preferences."
+              value={weights.wantsWeight}
+              onChange={(v) => setWeights((w) => ({ ...w, wantsWeight: v }))}
+            />
+            <WeightSliderRow
+              label="Adjacent singles"
+              description="Encourage or discourage clusters of singles."
+              value={weights.adjacentSinglesWeight}
+              onChange={(v) =>
+                setWeights((w) => ({ ...w, adjacentSinglesWeight: v }))
+              }
+            />
+            <WeightSliderRow
+              label="Same-gender adjacencies"
+              description="Balance or separate guests by gender."
+              value={weights.sameGenderAdjWeight}
+              onChange={(v) =>
+                setWeights((w) => ({ ...w, sameGenderAdjWeight: v }))
+              }
+            />
+            <WeightSliderRow
+              label="Alternating tables"
+              description="Reward well-mixed tables (e.g. bride/groom sides)."
+              value={weights.alternatingTablesWeight}
+              onChange={(v) =>
+                setWeights((w) => ({ ...w, alternatingTablesWeight: v }))
+              }
+            />
+            <WeightSliderRow
+              label="Split couples"
+              description="Penalty for separating couples across tables."
+              value={weights.splitCouplesWeight}
+              onChange={(v) =>
+                setWeights((w) => ({ ...w, splitCouplesWeight: v }))
+              }
+              min={5}
+              max={20}
+            />
           </div>
         </section>
 
@@ -925,6 +1070,28 @@ export default function HomePage() {
               <h2 className="text-sm font-semibold mb-3 text-slate-100">
                 Solver metrics
               </h2>
+
+              {/* Simple derived score using current weights */}
+              {(() => {
+                const m = result.metrics;
+                const score =
+                  -m.mustNotViolations * weights.mustNotWeight +
+                  m.wantsSatisfied * weights.wantsWeight -
+                  m.adjacentSingles * weights.adjacentSinglesWeight -
+                  m.sameGenderAdjacencies * weights.sameGenderAdjWeight +
+                  m.alternatingTables * weights.alternatingTablesWeight -
+                  m.splitCouples * weights.splitCouplesWeight;
+
+                return (
+                  <p className="text-sm mb-2 text-slate-200">
+                    <span className="font-semibold">Weighted score: </span>
+                    <span className="font-mono text-teal-300">
+                      {score.toFixed(1)}
+                    </span>
+                  </p>
+                );
+              })()}
+
               <ul className="text-sm space-y-1 text-slate-200">
                 <li>
                   <strong className="text-slate-100">
@@ -962,8 +1129,8 @@ export default function HomePage() {
                 </li>
               </ul>
               <p className="mt-3 text-[11px] text-slate-500">
-                Metrics reflect the current profile ({profile}) and weights
-                defined in the backend.
+                Metrics reflect the current profile ({profile}) and the weights
+                you&apos;ve configured above.
               </p>
             </div>
 
