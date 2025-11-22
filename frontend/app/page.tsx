@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
+import { SeatingLayout } from "./components/SeatingLayout"; // adjust path as needed
 
 type SeatingPlanResponse = {
   tables: {
@@ -34,15 +35,22 @@ type CsvImportResponse = {
   warnings: string[];
 };
 
+type TableConfig = {
+  id: string;
+  name: string;
+  shape?: "round" | "trestle";
+  capacity?: number;
+};
+
 const API_BASE_URL = "http://127.0.0.1:8000";
 
 const SAMPLE_GUESTS_AND_TABLES = {
   guests: [
     {
       id: "g1",
-      name: "Nick",
+      name: "Nick Ellison",
       gender: "Male",
-      maritalStatus: "Married to Charlotte",
+      maritalStatus: "Married to Charlotte Ellison",
       wantsToSitNextTo: ["g2"],
       mustNotSitNextTo: [],
       tags: ["VIP"],
@@ -50,9 +58,9 @@ const SAMPLE_GUESTS_AND_TABLES = {
     },
     {
       id: "g2",
-      name: "Charlotte",
+      name: "Charlotte Ellison",
       gender: "Female",
-      maritalStatus: "Married to Nick",
+      maritalStatus: "Married to Nick Ellison",
       wantsToSitNextTo: ["g1"],
       mustNotSitNextTo: [],
       tags: [],
@@ -114,6 +122,46 @@ export default function HomePage() {
   const [csvWarnings, setCsvWarnings] = useState<string[]>([]);
   const [csvLoading, setCsvLoading] = useState<boolean>(false);
 
+  // NEW: editable table configuration GUI
+  const [tablesConfig, setTablesConfig] = useState<TableConfig[] | null>(
+    SAMPLE_GUESTS_AND_TABLES.tables as TableConfig[]
+  );
+
+  // Map of guests for the visual layout
+  const guestsById = useMemo(() => {
+    const map = new Map<string, Guest>();
+
+    if (importedGuests) {
+      importedGuests.forEach((g) => map.set(g.id, g));
+      return map;
+    }
+
+    try {
+      const parsed = JSON.parse(jsonInput);
+      if (Array.isArray(parsed.guests)) {
+        parsed.guests.forEach((g: Guest) => {
+          if (g && typeof g.id === "string") {
+            map.set(g.id, g);
+          }
+        });
+      }
+    } catch {
+      // ignore
+    }
+
+    return map;
+  }, [importedGuests, jsonInput]);
+
+  // Shape lookup for SeatingLayout – takes shapes from the table GUI / JSON
+  const getTableShape = useCallback(
+    (tableId: string): "round" | "trestle" => {
+      const t = tablesConfig?.find((tbl) => tbl.id === tableId);
+      if (t?.shape === "trestle") return "trestle";
+      return "round";
+    },
+    [tablesConfig]
+  );
+
   const handleUseSample = () => {
     setJsonInput(JSON.stringify(SAMPLE_GUESTS_AND_TABLES, null, 2));
     setResult(null);
@@ -121,6 +169,7 @@ export default function HomePage() {
     setError(null);
     setImportedGuests(null);
     setCsvWarnings([]);
+    setTablesConfig(SAMPLE_GUESTS_AND_TABLES.tables as TableConfig[]);
   };
 
   const handleGenerate = async () => {
@@ -223,13 +272,12 @@ export default function HomePage() {
       setImportedGuests(data.guests);
       setCsvWarnings(data.warnings || []);
 
-      // Also sync into JSON editor so the solver sees them
       try {
         const parsed = JSON.parse(jsonInput);
         parsed.guests = data.guests;
         setJsonInput(JSON.stringify(parsed, null, 2));
       } catch {
-        // if JSON invalid, leave it – user can fix manually
+        // ignore
       }
     } catch (err: any) {
       console.error(err);
@@ -320,13 +368,60 @@ export default function HomePage() {
     }
   };
 
+  // TABLE GUI helpers
+
+  const loadTablesFromJson = () => {
+    try {
+      const parsed = JSON.parse(jsonInput);
+      if (Array.isArray(parsed.tables)) {
+        setTablesConfig(parsed.tables as TableConfig[]);
+        setError(null);
+      } else {
+        setError("No 'tables' array found in JSON.");
+      }
+    } catch {
+      setError("JSON is invalid; could not load tables.");
+    }
+  };
+
+  const syncTablesToJson = () => {
+    if (!tablesConfig) return;
+    try {
+      const parsed = JSON.parse(jsonInput);
+      parsed.tables = tablesConfig;
+      setJsonInput(JSON.stringify(parsed, null, 2));
+      setError(null);
+    } catch {
+      setError("Could not sync tables into JSON editor.");
+    }
+  };
+
+  const addTable = () => {
+    setTablesConfig((current) => {
+      const next = current ? [...current] : [];
+      const index = next.length + 1;
+      next.push({
+        id: `t${index}`,
+        name: `Table ${index}`,
+        shape: "round",
+        capacity: 10,
+      });
+      return next;
+    });
+  };
+
+  const removeTableAt = (index: number) => {
+    setTablesConfig((current) =>
+      current ? current.filter((_, i) => i !== index) : current
+    );
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50">
       {/* Top brand bar */}
       <header className="border-b border-slate-800 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {/* Logo placeholder / mark */}
             <div className="h-8 w-8 rounded-full bg-teal-400/20 border border-teal-400/60 flex items-center justify-center">
               <span className="text-xs font-semibold text-teal-300">IQ</span>
             </div>
@@ -405,7 +500,11 @@ export default function HomePage() {
               min={1}
               onChange={(e) => {
                 const raw = e.target.value;
-                setMaxAttempts(raw === "" ? "1" : raw);
+                if (raw === "") {
+                  setMaxAttempts("1");
+                } else {
+                  setMaxAttempts(raw);
+                }
               }}
             />
             <p className="text-[11px] text-slate-500">
@@ -507,7 +606,6 @@ export default function HomePage() {
                     <th className="px-2 py-1 text-left">Marital status</th>
                     <th className="px-2 py-1 text-left">Side</th>
                     <th className="px-2 py-1 text-left">Tags</th>
-                    {/* NEW */}
                     <th className="px-2 py-1 text-left">Wants (names)</th>
                     <th className="px-2 py-1 text-left">Must not (names)</th>
                   </tr>
@@ -518,7 +616,6 @@ export default function HomePage() {
                       key={guest.id}
                       className="border-b border-slate-800 last:border-b-0"
                     >
-                      {/* Name */}
                       <td className="px-2 py-1">
                         <input
                           className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
@@ -530,8 +627,6 @@ export default function HomePage() {
                           }}
                         />
                       </td>
-
-                      {/* Gender */}
                       <td className="px-2 py-1">
                         <input
                           className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
@@ -546,8 +641,6 @@ export default function HomePage() {
                           }}
                         />
                       </td>
-
-                      {/* Marital status */}
                       <td className="px-2 py-1">
                         <input
                           className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
@@ -562,8 +655,6 @@ export default function HomePage() {
                           }}
                         />
                       </td>
-
-                      {/* Side */}
                       <td className="px-2 py-1">
                         <input
                           className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
@@ -582,8 +673,6 @@ export default function HomePage() {
                           placeholder="bride/groom/other"
                         />
                       </td>
-
-                      {/* Tags */}
                       <td className="px-2 py-1">
                         <input
                           className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
@@ -600,15 +689,13 @@ export default function HomePage() {
                           placeholder="VIP, family, ..."
                         />
                       </td>
-
-                      {/* NEW: Wants (names) */}
                       <td className="px-2 py-1">
                         <input
                           className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
                           value={
-                            (guest.attributes?.wantsByName as string[] | undefined)?.join(
-                              ", "
-                            ) ?? ""
+                            (guest.attributes?.wantsByName as
+                              | string[]
+                              | undefined)?.join(", ") ?? ""
                           }
                           onChange={(e) => {
                             const wantsByName = e.target.value
@@ -628,8 +715,6 @@ export default function HomePage() {
                           placeholder="Alice, Bob"
                         />
                       </td>
-
-                      {/* NEW: Must not (names) */}
                       <td className="px-2 py-1">
                         <input
                           className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
@@ -663,6 +748,132 @@ export default function HomePage() {
             </div>
           </section>
         )}
+
+        {/* NEW: Table configuration GUI */}
+        <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-slate-100">
+              Tables (configuration)
+            </h2>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={loadTablesFromJson}
+                className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-950 hover:border-teal-400 hover:text-teal-300 transition-colors"
+              >
+                Load from JSON
+              </button>
+              <button
+                type="button"
+                onClick={syncTablesToJson}
+                className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-950 hover:border-teal-400 hover:text-teal-300 transition-colors"
+              >
+                Sync to JSON editor
+              </button>
+              <button
+                type="button"
+                onClick={addTable}
+                className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-950 hover:border-teal-400 hover:text-teal-300 transition-colors"
+              >
+                + Add table
+              </button>
+            </div>
+          </div>
+
+          {tablesConfig && tablesConfig.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-xs text-slate-200">
+                <thead className="border-b border-slate-800 text-slate-400">
+                  <tr>
+                    <th className="px-2 py-1 text-left">ID</th>
+                    <th className="px-2 py-1 text-left">Name</th>
+                    <th className="px-2 py-1 text-left">Shape</th>
+                    <th className="px-2 py-1 text-left">Capacity</th>
+                    <th className="px-2 py-1 text-left"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tablesConfig.map((tbl, idx) => (
+                    <tr
+                      key={tbl.id || idx}
+                      className="border-b border-slate-800 last:border-b-0"
+                    >
+                      <td className="px-2 py-1">
+                        <input
+                          className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
+                          value={tbl.id}
+                          onChange={(e) => {
+                            const next = [...tablesConfig];
+                            next[idx] = { ...tbl, id: e.target.value };
+                            setTablesConfig(next);
+                          }}
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <input
+                          className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
+                          value={tbl.name}
+                          onChange={(e) => {
+                            const next = [...tablesConfig];
+                            next[idx] = { ...tbl, name: e.target.value };
+                            setTablesConfig(next);
+                          }}
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <select
+                          className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
+                          value={tbl.shape ?? "round"}
+                          onChange={(e) => {
+                            const shape =
+                              e.target.value === "trestle"
+                                ? "trestle"
+                                : "round";
+                            const next = [...tablesConfig];
+                            next[idx] = { ...tbl, shape };
+                            setTablesConfig(next);
+                          }}
+                        >
+                          <option value="round">Round</option>
+                          <option value="trestle">Trestle</option>
+                        </select>
+                      </td>
+                      <td className="px-2 py-1">
+                        <input
+                          type="number"
+                          min={1}
+                          className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
+                          value={tbl.capacity ?? ""}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const capacity =
+                              val === "" ? undefined : Number(val);
+                            const next = [...tablesConfig];
+                            next[idx] = { ...tbl, capacity };
+                            setTablesConfig(next);
+                          }}
+                        />
+                      </td>
+                      <td className="px-2 py-1 text-right">
+                        <button
+                          type="button"
+                          onClick={() => removeTableAt(idx)}
+                          className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-950 hover:border-red-500 hover:text-red-300 transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-500">
+              No tables loaded yet. Load from JSON or add tables manually.
+            </p>
+          )}
+        </section>
 
         {/* JSON editor */}
         <section className="mb-4">
@@ -784,6 +995,27 @@ export default function HomePage() {
                 ))}
               </div>
             </div>
+          </section>
+        )}
+
+        {result && (
+          <section className="mt-6 bg-slate-900 rounded-xl border border-slate-800 p-4">
+            <h2 className="text-sm font-semibold mb-3 text-slate-100">
+              Visual seating layout
+            </h2>
+            <p className="text-[11px] text-slate-500 mb-3">
+              SVG-based rendering of tables and seats. Table shapes come from
+              the <code className="text-teal-300">tables</code> JSON (
+              <code className="text-teal-300">shape</code>:{" "}
+              <code className="text-teal-300">&quot;round&quot;</code> |{" "}
+              <code className="text-teal-300">&quot;trestle&quot;</code>); guest
+              colour shows gender and the tooltip shows full name and tags.
+            </p>
+            <SeatingLayout
+              plan={result}
+              guestsById={guestsById}
+              getTableShape={getTableShape}
+            />
           </section>
         )}
 
