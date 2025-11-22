@@ -557,36 +557,377 @@ CSV mapping, templates, autofill
     
 -   Live metrics panel
     
+# **Iteration 7 — Save Events & Accounts (Persistence Layer)**
 
-## **Iteration 7 — Save Events**
+> _Goal: Move from a demo tool to a real product by enabling saving, reloading, and user ownership of events._
 
--   SQLite → Postgres
+### **Backend**
+
+-   Introduce **SQLite**, then migrate to **Postgres** once stable.
     
--   Event model (guests, weights, tables, results)
+-   Database schema for:
     
--   List & load events
+    -   **Event** (name, type/profile, timestamps)
+        
+    -   **Guests** (all guest fields, attributes JSON)
+        
+    -   **Tables** (shape, capacity, names)
+        
+    -   **Weights** (full weight config per event)
+        
+    -   **Solver Results** (latest recommended plan)
+        
+-   Add minimal **User Accounts** (email + password or magic link; no roles yet)
+    
+-   Associate events with users (`user_id` foreign key)
+    
+-   Versioning: store **event revisions** (auto-saved on solver run)
     
 
-## **Iteration 8 — Manual Overrides**
+### **Frontend**
 
--   Drag & drop guests
+-   “**My Events**” dashboard (list, search, open)
     
--   Locking mechanism
+-   Create → Edit → Save workflow
     
--   Re-run solver respecting frozen seats
+-   Auto-save on:
+    
+    -   guest edits
+        
+    -   table edits
+        
+    -   weight changes
+        
+    -   solver runs
+        
+-   Ability to **duplicate** events
     
 
-## **Iteration 9 — Additional Profiles**
+### **Outcome**
 
--   Corporate networking
+-   The app becomes a persistent planning tool rather than a one-off generator.
     
--   Formal protocol
+-   Precursor to billing, collaboration, and enterprise features.
     
--   Singles mixer
+
+# **Iteration 8 — Manual Overrides & Solver Integration**
+
+> _Goal: Combine human judgment and algorithmic optimisation. Critical for real planners._
+
+### **Frontend**
+
+-   **Drag & drop guests** between seats
     
--   Conference group mixing
+-   Visual indicators for:
+    
+    -   empty seats
+        
+    -   locked seats
+        
+    -   constraint violations
+        
+-   Add “**Lock seat**” toggle on a guest/table position
+    
+-   Undo / redo history (shallow version first)
+    
+
+### **Backend**
+
+-   Extend solver ingestion to accept:
+    
+    -   `lockedSeats: { tableId, seatIndex, guestId }[]`
+        
+-   Solver must:
+    
+    -   honour all locked seats
+        
+    -   optimise remaining seats around them
+        
+-   Validation:
+    
+    -   detect conflicts between locked seats and constraints
+        
+    -   report unsatisfiable scenarios
+        
+
+### **Outcome**
+
+-   Essential for wedding professionals, event planners, and venues.
+    
+-   Unlocks collaboration, reviews, and more accurate commercial plans.
+    
+
+# **Iteration 9 — Multi-Profile Support (Wedding → Corporate → Protocol)**
+
+> _Goal: Expand beyond weddings and unlock paid verticals._
+
+### **Backend**
+
+Add profile configurations with:
+
+-   different scoring priorities
+    
+-   different default weights
+    
+-   different CSV import adapters
+    
+-   different constraint behaviour (e.g., corporate networking cares about group mixing, not couples)
+    
+
+### **Initial Profiles**
+
+1.  **Corporate Networking**
+    
+    -   Maximise cross-department adjacencies
+        
+    -   Ensure seniority spread across tables
+        
+    -   Optional icebreaker clustering (e.g., by interest tags)
+        
+2.  **Formal Protocol**
+    
+    -   VIP tiers
+        
+    -   Avoid rivalries / adversarial nations
+        
+    -   Head table logic
+        
+    -   Gender alternation stronger
+        
+3.  **Singles Mixer**
+    
+    -   Strong adjacency incentives
+        
+    -   Avoid clustering "already matched" pairs
+        
+    -   Rotate tables
+        
+4.  **Conference Group Mixing**
+    
+    -   Seat delegates to maximise cross-team contact
+        
+    -   Avoid same-company adjacency
+        
+
+### **Frontend**
+
+-   Add **profile chooser**
+    
+-   Dynamically show/hide profile-appropriate fields
+    
+-   Load and save profile with each event
+    
+
+### **Outcome**
+
+-   Product becomes multi-vertical instead of wedding-only.
+    
+-   Opens corporate and enterprise revenue streams.
     
 
 # 12\. Brand Promise
 
 ArrangeIQ delivers **intelligent**, **transparent**, and **precise** seating optimisation—balancing human relationships with mathematical clarity.
+
+
+### **Top Priority — Core Product (MUST HAVE FOR MVP)**
+
+-   Constraint-based solver (deterministic, weighted, seeded)
+    
+-   Multi-profile support (starting with wedding\_default)
+    
+-   CSV import & normalisation (wedding adapter)
+    
+-   Guest editing UI (inline table)
+    
+-   Table configuration UI (round/trestle, capacity, names)
+    
+-   JSON-driven solver request
+    
+-   Visual seating layout (SVG, round + trestle)
+    
+-   Weight sliders for constraints
+    
+-   Metrics dashboard (must-not, wants, gender, singles)
+    
+-   Conflict detection (must-not / capacity failures)
+    
+-   Manual overrides (drag seats, lock seat)
+    
+-   Re-run solver with locked seat constraints
+    
+-   Event save/load (database persistence)
+    
+-   Event duplication and versioning
+    
+-   User authentication (email + password)
+    
+-   Basic access control (own events only)
+    
+-   Printable/exportable seating layouts
+    
+-   CSV export (final seating plan)
+    
+-   Performance targets (250–300 guests under 5–10 seconds)
+    
+
+### **Second Priority — Commercial Foundations (NECESSARY TO SELL)**
+
+-   Stripe billing integration (monthly, annual, per-event)
+    
+-   Free + paid tiers enforcement (limits on guests/events/features)
+    
+-   Billing portal & subscription management
+    
+-   Password reset + email verification
+    
+-   Save event revisions (version history)
+    
+-   Audit log (changes to seats, guests, tables)
+    
+-   Admin dashboard (users, events, billing status)
+    
+-   Rate limiting + API protection
+    
+-   Pseudonymisation/data deletion tooling (GDPR)
+    
+-   Logs + error tracing (Sentry)
+    
+-   Usage analytics (MAU, DAU, conversions)
+    
+-   Hosting infrastructure (Docker, HTTPS, scaling)
+    
+
+### **Third Priority — Premium Product Features (DRIVES UPSELL)**
+
+-   Drag-and-drop full seating editor
+    
+-   Seat locking + solver respecting manual placements
+    
+-   “Why this seat?” reasoning panel
+    
+-   Constraint graph visualization (wants/must-not)
+    
+-   Highlight conflicts live in UI
+    
+-   Group seating: families, teams, departments
+    
+-   Multiple solver profiles:
+    
+    -   corporate\_networking
+        
+    -   diplomatic\_protocol
+        
+    -   singles\_event
+        
+    -   gala\_formal
+        
+-   Custom profile builder (pros only)
+    
+-   Advanced exports (PDF packaged layouts)
+    
+-   Event notes and collaboration comments
+    
+-   Multi-table overview showing unbalanced tables
+    
+-   Bulk editing tools: auto-tagging, find/replace tags
+    
+-   Venue mode: seat-number → physical chair mapping
+    
+
+### **Fourth Priority — Professional/Planner Features (FOR AGENCY CUSTOMERS)**
+
+-   Multi-user collaboration
+    
+-   Real-time collaboration (like Figma/Notion)
+    
+-   Role-based permissions (Owner / Planner / Viewer)
+    
+-   Planner dashboard: manage multiple client events
+    
+-   Client-safe sharing links (read-only)
+    
+-   White-label PDF exports with planner branding
+    
+-   Copy event templates (wedding, gala, corporate)
+    
+-   Upload floorplans (venue maps)
+    
+-   Assign physical table positions in venue map
+    
+-   Mobile/tablet layout editor
+    
+-   Offline support for field use at venues
+    
+
+### **Fifth Priority — Enterprise / API / Integrations**
+
+-   Public API with API keys
+    
+-   Webhooks (event solved, guest updated)
+    
+-   SSO / SAML for enterprises
+    
+-   Integration with banqueting systems (Opera, Delphi)
+    
+-   CRM integration for guest lists (Salesforce, HubSpot)
+    
+-   Bulk event import/export
+    
+-   Data residency options (EU/US regions)
+    
+-   On-premise or private-cloud deployment
+    
+-   Dedicated enterprise support SLAs
+    
+-   Full audit logging + immutable event store
+    
+
+### **Sixth Priority — Marketing, Growth & Product Layer**
+
+-   Marketing site with conversion flow
+    
+-   SEO-optimised landing pages per vertical
+    
+-   Pricing page & plan comparison
+    
+-   Blog + “seating optimisation insights” content
+    
+-   Guided onboarding (tutorial, tooltips)
+    
+-   Feature adoption tracking
+    
+-   Email flows:
+    
+    -   welcome series
+        
+    -   trial expiry
+        
+    -   abandoned events
+        
+    -   upsell nudges
+        
+-   Case studies (weddings, corporate, diplomatic)
+    
+-   Social shareable seating visual exports
+    
+
+### **Seventh Priority — Long-Term Innovation & Differentiation**
+
+-   Personality / interest clustering for matchmaking
+    
+-   AI-assisted data cleaning (optional, transparent)
+    
+-   “Drama mode” (intentionally place adversarial pairs)
+    
+-   Automatic seat suggestions during manual edits
+    
+-   Heatmaps of social compatibility
+    
+-   Adaptive solver modes (annealing, genetic selection)
+    
+-   Predictive “event-time seating changes” engine
+    
+-   Guest self-check-in → seat assignment adjustments
+    
+-   Learning over time (profile refinement per planner)
