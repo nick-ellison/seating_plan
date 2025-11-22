@@ -18,6 +18,22 @@ type SeatingPlanResponse = {
   attemptsMade: number;
 };
 
+type Guest = {
+  id: string;
+  name: string;
+  gender?: string | null;
+  maritalStatus?: string | null;
+  wantsToSitNextTo: string[];
+  mustNotSitNextTo: string[];
+  tags: string[];
+  attributes: Record<string, any>;
+};
+
+type CsvImportResponse = {
+  guests: Guest[];
+  warnings: string[];
+};
+
 const API_BASE_URL = "http://127.0.0.1:8000";
 
 const SAMPLE_GUESTS_AND_TABLES = {
@@ -73,10 +89,19 @@ const SAMPLE_GUESTS_AND_TABLES = {
   ],
 };
 
+function isSeatingPlanResponse(data: any): data is SeatingPlanResponse {
+  return (
+    data &&
+    Array.isArray(data.tables) &&
+    typeof data.metrics === "object" &&
+    typeof data.attemptsMade === "number"
+  );
+}
+
 export default function HomePage() {
   const [profile, setProfile] = useState<string>("wedding_default");
-  const [maxAttempts, setMaxAttempts] = useState<number>(1000);
-  const [seed, setSeed] = useState<number | "">("");
+  const [maxAttempts, setMaxAttempts] = useState<string>("1000");
+  const [seed, setSeed] = useState<string>("");
   const [jsonInput, setJsonInput] = useState<string>(
     JSON.stringify(SAMPLE_GUESTS_AND_TABLES, null, 2)
   );
@@ -85,11 +110,17 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
+  const [importedGuests, setImportedGuests] = useState<Guest[] | null>(null);
+  const [csvWarnings, setCsvWarnings] = useState<string[]>([]);
+  const [csvLoading, setCsvLoading] = useState<boolean>(false);
+
   const handleUseSample = () => {
     setJsonInput(JSON.stringify(SAMPLE_GUESTS_AND_TABLES, null, 2));
     setResult(null);
     setRawResult(null);
     setError(null);
+    setImportedGuests(null);
+    setCsvWarnings([]);
   };
 
   const handleGenerate = async () => {
@@ -107,12 +138,24 @@ export default function HomePage() {
         );
       }
 
+      const maxAttemptsNumber = (() => {
+        const n = Number(maxAttempts);
+        return Number.isFinite(n) && n > 0 ? n : 1;
+      })();
+
+      const seedValue = (() => {
+        const trimmed = seed.trim();
+        if (trimmed === "") return undefined;
+        const n = Number(trimmed);
+        return Number.isFinite(n) ? n : undefined;
+      })();
+
       const body = {
         guests: parsed.guests,
         tables: parsed.tables,
         profile,
-        maxAttempts,
-        seed: seed === "" ? undefined : Number(seed),
+        maxAttempts: maxAttemptsNumber,
+        seed: seedValue,
       };
 
       const res = await fetch(`${API_BASE_URL}/api/seating/generate`, {
@@ -123,20 +166,157 @@ export default function HomePage() {
         body: JSON.stringify(body),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
+      let data: unknown;
+      try {
+        data = await res.json();
+      } catch {
         throw new Error(
-          data?.detail || `API error (${res.status}): ${res.statusText}`
+          `API returned a non-JSON response (${res.status} ${res.statusText}).`
         );
       }
 
-      setResult(data as SeatingPlanResponse);
+      if (!res.ok) {
+        const detail =
+          (data as any)?.detail ||
+          `API error (${res.status}): ${res.statusText}`;
+        throw new Error(detail);
+      }
+
+      if (!isSeatingPlanResponse(data)) {
+        throw new Error("API response shape is not as expected.");
+      }
+
+      setResult(data);
       setRawResult(JSON.stringify(data, null, 2));
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Unknown error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCsvUpload = async (file: File | null) => {
+    if (!file) return;
+    setCsvLoading(true);
+    setError(null);
+    setCsvWarnings([]);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("profile", profile);
+
+      const res = await fetch(`${API_BASE_URL}/api/guests/import-csv`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = (await res.json()) as CsvImportResponse;
+
+      if (!res.ok) {
+        throw new Error(
+          (data as any)?.detail ||
+            `CSV import failed (${res.status}: ${res.statusText})`
+        );
+      }
+
+      setImportedGuests(data.guests);
+      setCsvWarnings(data.warnings || []);
+
+      // Also sync into JSON editor so the solver sees them
+      try {
+        const parsed = JSON.parse(jsonInput);
+        parsed.guests = data.guests;
+        setJsonInput(JSON.stringify(parsed, null, 2));
+      } catch {
+        // if JSON invalid, leave it – user can fix manually
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "CSV import failed");
+    } finally {
+      setCsvLoading(false);
+    }
+  };
+
+  const handleExportCsv = () => {
+    let guests: Guest[] = importedGuests || [];
+
+    if (!guests.length) {
+      try {
+        const parsed = JSON.parse(jsonInput);
+        if (Array.isArray(parsed.guests)) {
+          guests = parsed.guests;
+        }
+      } catch {
+        // no-op
+      }
+    }
+
+    if (!guests.length) {
+      setError("No guests available to export.");
+      return;
+    }
+
+    const header = [
+      "Name",
+      "Gender",
+      "Marital_Status",
+      "Wants to sit next to",
+      "Must not sit next to",
+    ];
+
+    const rows = guests.map((g) => {
+      const wantsNames =
+        (g.attributes?.wantsByName as string[] | undefined) ?? [];
+      const mustNotNames =
+        (g.attributes?.mustNotByName as string[] | undefined) ?? [];
+
+      return [
+        g.name ?? "",
+        g.gender ?? "",
+        g.maritalStatus ?? "",
+        wantsNames.join(", "),
+        mustNotNames.join(", "),
+      ];
+    });
+
+    const csvLines = [
+      header.join(","),
+      ...rows.map((r) =>
+        r
+          .map((cell) => {
+            const v = String(cell ?? "");
+            return v.includes(",") || v.includes('"')
+              ? `"${v.replace(/"/g, '""')}"`
+              : v;
+          })
+          .join(",")
+      ),
+    ];
+
+    const blob = new Blob([csvLines.join("\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "guests_export.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const syncImportedToJson = () => {
+    if (!importedGuests) return;
+    try {
+      const parsed = JSON.parse(jsonInput);
+      parsed.guests = importedGuests;
+      setJsonInput(JSON.stringify(parsed, null, 2));
+    } catch {
+      setError("Could not sync guests into JSON editor.");
     }
   };
 
@@ -166,8 +346,7 @@ export default function HomePage() {
           </div>
           <div className="hidden md:block">
             <span className="text-[11px] text-slate-500">
-              API base:{" "}
-              <code className="text-teal-300">{API_BASE_URL}</code>
+              API base: <code className="text-teal-300">{API_BASE_URL}</code>
             </span>
           </div>
         </div>
@@ -182,8 +361,9 @@ export default function HomePage() {
                 Seating Solver Playground
               </h2>
               <p className="text-sm text-slate-400">
-                Use this internal tool to exercise the ArrangeIQ solver profiles.
-                Paste guests/tables JSON, tweak parameters, and inspect metrics.
+                Use this internal tool to exercise the ArrangeIQ solver
+                profiles. Paste guests/tables JSON, tweak parameters, import
+                real CSVs, and inspect metrics.
               </p>
             </div>
             <div className="text-xs text-slate-400 md:text-right">
@@ -223,7 +403,10 @@ export default function HomePage() {
               className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-400"
               value={maxAttempts}
               min={1}
-              onChange={(e) => setMaxAttempts(Number(e.target.value) || 1)}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setMaxAttempts(raw === "" ? "1" : raw);
+              }}
             />
             <p className="text-[11px] text-slate-500">
               Upper bound on solver search iterations.
@@ -233,15 +416,15 @@ export default function HomePage() {
           <div className="space-y-2">
             <label className="text-xs font-medium text-slate-200">
               Seed{" "}
-              <span className="text-slate-500">(optional, for reproducibility)</span>
+              <span className="text-slate-500">
+                (optional, for reproducibility)
+              </span>
             </label>
             <input
               type="number"
               className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-400"
               value={seed}
-              onChange={(e) =>
-                setSeed(e.target.value === "" ? "" : Number(e.target.value))
-              }
+              onChange={(e) => setSeed(e.target.value)}
               placeholder="leave blank for random"
             />
             <p className="text-[11px] text-slate-500">
@@ -249,6 +432,237 @@ export default function HomePage() {
             </p>
           </div>
         </section>
+
+        {/* CSV Import */}
+        <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-100 mb-1">
+                Import guests from CSV
+              </h2>
+              <p className="text-xs text-slate-400">
+                Upload a wedding CSV. It will be mapped into the generic guest
+                model for the solver. Currently supports the{" "}
+                <span className="text-teal-300">wedding_default</span> profile.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-slate-300 cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-slate-700 bg-slate-950 hover:border-teal-400 hover:text-teal-300 transition-colors">
+                <span>{csvLoading ? "Importing…" : "Choose CSV file"}</span>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={(e) =>
+                    handleCsvUpload(e.target.files?.[0] ?? null)
+                  }
+                  disabled={csvLoading}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                className="text-[11px] px-3 py-1.5 rounded-md border border-slate-700 bg-slate-950 hover:border-teal-400 hover:text-teal-300 transition-colors"
+              >
+                Export guests CSV
+              </button>
+            </div>
+          </div>
+
+          {csvWarnings.length > 0 && (
+            <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+              <h3 className="text-xs font-semibold text-amber-300 mb-1">
+                Import warnings
+              </h3>
+              <ul className="text-xs text-amber-100 space-y-1 list-disc list-inside">
+                {csvWarnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+
+        {/* Editable guests table */}
+        {importedGuests && (
+          <section className="mb-6 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-slate-100">
+                Guests (editable)
+              </h2>
+              <button
+                type="button"
+                className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-950 hover:border-teal-400 hover:text-teal-300 transition-colors"
+                onClick={syncImportedToJson}
+              >
+                Sync to JSON editor
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-xs text-slate-200">
+                <thead className="border-b border-slate-800 text-slate-400">
+                  <tr>
+                    <th className="px-2 py-1 text-left">Name</th>
+                    <th className="px-2 py-1 text-left">Gender</th>
+                    <th className="px-2 py-1 text-left">Marital status</th>
+                    <th className="px-2 py-1 text-left">Side</th>
+                    <th className="px-2 py-1 text-left">Tags</th>
+                    {/* NEW */}
+                    <th className="px-2 py-1 text-left">Wants (names)</th>
+                    <th className="px-2 py-1 text-left">Must not (names)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importedGuests.map((guest, idx) => (
+                    <tr
+                      key={guest.id}
+                      className="border-b border-slate-800 last:border-b-0"
+                    >
+                      {/* Name */}
+                      <td className="px-2 py-1">
+                        <input
+                          className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
+                          value={guest.name}
+                          onChange={(e) => {
+                            const next = [...importedGuests];
+                            next[idx] = { ...guest, name: e.target.value };
+                            setImportedGuests(next);
+                          }}
+                        />
+                      </td>
+
+                      {/* Gender */}
+                      <td className="px-2 py-1">
+                        <input
+                          className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
+                          value={guest.gender ?? ""}
+                          onChange={(e) => {
+                            const next = [...importedGuests];
+                            next[idx] = {
+                              ...guest,
+                              gender: e.target.value || null,
+                            };
+                            setImportedGuests(next);
+                          }}
+                        />
+                      </td>
+
+                      {/* Marital status */}
+                      <td className="px-2 py-1">
+                        <input
+                          className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
+                          value={guest.maritalStatus ?? ""}
+                          onChange={(e) => {
+                            const next = [...importedGuests];
+                            next[idx] = {
+                              ...guest,
+                              maritalStatus: e.target.value || null,
+                            };
+                            setImportedGuests(next);
+                          }}
+                        />
+                      </td>
+
+                      {/* Side */}
+                      <td className="px-2 py-1">
+                        <input
+                          className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
+                          value={guest.attributes?.side ?? ""}
+                          onChange={(e) => {
+                            const next = [...importedGuests];
+                            next[idx] = {
+                              ...guest,
+                              attributes: {
+                                ...guest.attributes,
+                                side: e.target.value,
+                              },
+                            };
+                            setImportedGuests(next);
+                          }}
+                          placeholder="bride/groom/other"
+                        />
+                      </td>
+
+                      {/* Tags */}
+                      <td className="px-2 py-1">
+                        <input
+                          className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
+                          value={guest.tags.join(", ")}
+                          onChange={(e) => {
+                            const tags = e.target.value
+                              .split(",")
+                              .map((t) => t.trim())
+                              .filter(Boolean);
+                            const next = [...importedGuests];
+                            next[idx] = { ...guest, tags };
+                            setImportedGuests(next);
+                          }}
+                          placeholder="VIP, family, ..."
+                        />
+                      </td>
+
+                      {/* NEW: Wants (names) */}
+                      <td className="px-2 py-1">
+                        <input
+                          className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
+                          value={
+                            (guest.attributes?.wantsByName as string[] | undefined)?.join(
+                              ", "
+                            ) ?? ""
+                          }
+                          onChange={(e) => {
+                            const wantsByName = e.target.value
+                              .split(",")
+                              .map((t) => t.trim())
+                              .filter(Boolean);
+                            const next = [...importedGuests];
+                            next[idx] = {
+                              ...guest,
+                              attributes: {
+                                ...guest.attributes,
+                                wantsByName,
+                              },
+                            };
+                            setImportedGuests(next);
+                          }}
+                          placeholder="Alice, Bob"
+                        />
+                      </td>
+
+                      {/* NEW: Must not (names) */}
+                      <td className="px-2 py-1">
+                        <input
+                          className="w-full bg-slate-950/40 border border-slate-700 rounded-sm px-1 py-0.5"
+                          value={
+                            (guest.attributes?.mustNotByName as
+                              | string[]
+                              | undefined)?.join(", ") ?? ""
+                          }
+                          onChange={(e) => {
+                            const mustNotByName = e.target.value
+                              .split(",")
+                              .map((t) => t.trim())
+                              .filter(Boolean);
+                            const next = [...importedGuests];
+                            next[idx] = {
+                              ...guest,
+                              attributes: {
+                                ...guest.attributes,
+                                mustNotByName,
+                              },
+                            };
+                            setImportedGuests(next);
+                          }}
+                          placeholder="Ex Partner"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         {/* JSON editor */}
         <section className="mb-4">
@@ -271,8 +685,9 @@ export default function HomePage() {
             className="w-full font-mono text-xs rounded-md border border-slate-800 p-2 bg-slate-950 text-slate-100 focus:outline-none focus:ring-1 focus:ring-teal-400"
           />
           <p className="mt-2 text-[11px] text-slate-500">
-            JSON must include top-level <code className="text-teal-300">guests</code>{" "}
-            and <code className="text-teal-300">tables</code> arrays.
+            JSON must include top-level{" "}
+            <code className="text-teal-300">guests</code> and{" "}
+            <code className="text-teal-300">tables</code> arrays.
           </p>
         </section>
 
@@ -287,9 +702,7 @@ export default function HomePage() {
             {loading ? "Generating seating..." : "Generate seating plan"}
           </button>
           {error && (
-            <span className="text-sm text-red-400">
-              Error: {error}
-            </span>
+            <span className="text-sm text-red-400">Error: {error}</span>
           )}
         </section>
 
@@ -381,7 +794,7 @@ export default function HomePage() {
               Raw API response
             </h2>
             <pre className="w-full font-mono text-xs rounded-md border border-slate-800 p-2 bg-slate-950 text-slate-100 overflow-x-auto">
-{rawResult}
+              {rawResult}
             </pre>
             <p className="mt-2 text-[11px] text-slate-500">
               Use this output to debug solver behaviour, metrics, and future
