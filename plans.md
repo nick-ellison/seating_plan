@@ -1,188 +1,592 @@
-# Development Plan — Auto Seating Planner (Updated)
+# ✅ **ArrangeIQ — Complete Product, Brand & Technical Specification**
 
-This plan reflects the refined product vision:
+### _Master Document (Markdown)_
 
-- Solver-first; wedding logic as one profile
-- Generic data model using `attributes` and `profile`
-- UI + API layers must not assume weddings by default
-- CSV import treated as a wedding adapter, not the core data interface
+# 1\. Brand Overview
 
----
+## 1.1 Essence
 
-## Iteration 1 — Solver Module (Standalone)
+**Tagline:**  
+**The Intelligent Seating Engine**
 
-**Goal:** Extract core seating engine into reusable Python package with CLI + tests.
+**Purpose**  
+ArrangeIQ solves complex seating problems using transparent, tunable optimisation — not black-box AI.
 
-**Deliverables:**
+**Vision**  
+To become the world’s most trusted seating logic engine for weddings, corporate dinners, conferences, galas, and diplomatic events.
 
-- `backend/seating_solver/` directory containing:
-  - Models: `Guest`, `Table`, `SeatingPlan`, `Metrics`
-  - `solve(guests, tables, profile="wedding_default", weights=None, max_attempts=1000, seed=None)`
-  - Guests include `attributes: dict`
-  - `profile` accepted even if only `"wedding_default"` is implemented
+**Positioning**  
+A professional-grade, solver-first seating engine driven by explicit constraints, user-configurable weights, and deterministic logic.
 
-- CLI runner:
-  `python -m seating_solver input.json`
+## 1.2 Personality
+
+ArrangeIQ is:
+
+-   **Intelligent** — algorithmic, not arbitrary
+    
+-   **Professional** — built for planners, venues, corporates, government
+    
+-   **Modern** — crisp SaaS aesthetic
+    
+-   **Approachable** — clarity without jargon
+    
+-   **Reliable** — deterministic scoring, explainable output
+    
 
-- Unit tests covering:
-  - must-not enforcement
-  - wants satisfied
-  - adjacent singles
-  - alternating tables
-  - deterministic seeds
-  - guests with arbitrary attributes (e.g., `{"department": "Sales"}`)
+**Tone:** Calm, confident, concise.
 
-**Outcome:** Solver works independently of UI/CSV and does not assume weddings.
+## 1.3 Messaging
+
+**Primary Message:**  
+ArrangeIQ intelligently and transparently optimises seating for any event.
 
----
+**Supporting:**
 
-## Iteration 2 — Solver API (FastAPI)
+-   Optimises relationships, preferences, and logistics
+    
+-   Fully explainable scoring and constraints
+    
+-   Reproducible output via seeds
+    
+-   Adjust solver behaviour via intuitive weights
+    
+-   Works across multiple verticals (weddings → diplomacy)
+    
+
+**Value Pillars:**
+
+1.  **Accuracy** — Put the right people in the right places
+    
+2.  **Efficiency** — Reduce hours of manual effort
+    
+3.  **Confidence** — Avoid social or political mistakes
+    
+4.  **Flexibility** — Configurable profiles + weights
+    
+5.  **Professionalism** — Produces venue-ready plans
+    
+
+## 1.4 Visual Identity
+
+**Design principles:**
+
+-   Minimalist
+    
+-   Geometric
+    
+-   Modern
+    
+-   Softer human edge
+    
 
-**Goal:** Expose solver over HTTP.
+**Logo directions:**
+
+-   Stylised **A** or **IQ**
+    
+-   Circular seating grid
+    
+-   Lattice/optimisation structure
+    
+
+**Colours:**  
+Midnight blue, teal accents, slate greys, white.
+
+**Typography:**  
+Inter for UI + body text, optional display font for hero sections.
+
+# 2\. Commercial Vision
+
+## 2.1 Why “No AI” is a Feature
 
-**Deliverables:**
+Competitors claiming AI have disadvantages:
+
+-   Lack of explainability
+    
+-   Non-deterministic output
+    
+-   Users cannot understand _why_ someone is placed somewhere
+    
+-   Potential bias
+    
+-   Impossible to audit for diplomacy or corporates
+    
 
-- FastAPI app in `backend/app/main.py`
-- Pydantic models:
-  - `GuestIn` (includes `attributes`)
-  - `TableIn`
-  - `GenerateRequest` (includes `profile`)
-  - `SeatingPlanOut`
+ArrangeIQ’s solver is:
 
-- Endpoints:
-  - `POST /api/seating/generate`
-  - `GET /api/health`
+-   Deterministic
+    
+-   Transparent
+    
+-   Weight-configurable
+    
+-   Auditable
+    
+-   Governable
+    
 
-- API tests using `pytest` + `httpx`
+→ This positions ArrangeIQ as **the safe, professional alternative to AI-chaos**.
 
-**Outcome:** Seating can be solved via curl/Postman without UI.
+## 2.2 Monetisation Model
 
----
+### Free Tier
 
-## Iteration 3 — Minimal Frontend (Developer UI)
+-   Up to 40 guests
+    
+-   No persistence
+    
+-   Basic metrics
+    
 
-**Goal:** Simple UI to hit the API.
+### Pro Tier
 
-**Deliverables:**
+-   Unlimited guests
+    
+-   Save/load events
+    
+-   Weight sliders
+    
+-   Exports (CSV, PDF)
+    
+-   Multiple profiles
+    
 
-- Basic Next.js app
-- One page containing:
-  - JSON editor or sample request button
-  - Button “Generate seating”
-  - Pretty-print seating plan and metrics
-  - Profile dropdown (only `"wedding_default"` initially)
+### Planner / Venue Tier
 
-**Outcome:** Full request → solve → display loop.
+-   Team accounts
+    
+-   Unlimited events
+    
+-   White-label exports
+    
+-   API for venue CRM
+    
 
----
+### Enterprise Protocol Tier
 
-## Iteration 4 — CSV Import + Validation (Wedding Adapter)
+-   Diplomatic / government seating rules
+    
+-   Dedicated solver instances
+    
+-   Compliance contracts
+    
 
-**Goal:** Work with real CSV guest lists.
+# 3\. Requirements & Use Cases
 
-**Backend:**
+## 3.1 Purpose
 
-- `POST /api/guests/import-csv`
-- Maps spreadsheet columns to `Guest` model
-- Should be stored in:
-  `backend/app/importers/wedding_csv.py`
+To generate optimised seating plans using constraint-based logic that balances relationships, preferences, politics, and social outcomes.
 
-**Frontend:**
+## 3.2 Users
 
-- Upload CSV
-- Show guest table (editable)
-- Show warnings
-- Export CSV
+-   Wedding planners
+    
+-   Couples
+    
+-   Corporate events teams
+    
+-   Banqueting managers
+    
+-   Diplomatic protocol officers
+    
 
-**Rule:**
-- Parsing is profile-specific; solver input stays generic.
+## 3.3 Example Use Cases
 
-**Outcome:** Supports real-world workflows without wedding logic leaking into solver.
+Scenario
 
----
+Goal
 
-## Iteration 5 — Visual Seating Layout
+Wedding with 250 guests
 
-**Goal:** Graphical rendering of tables.
+Avoid family politics, seat couples intelligently
 
-**Deliverables:**
+Corporate dinner
 
-- SVG-based seat rendering
-- Round tables using polar coordinates
-- Trestle layout using rows
-- Optional badges:
-  - Single
-  - Couple
-  - Constraint warnings
-  - Display tags/attributes optionally
+Encourage networking by department
 
-**Outcome:** Human-readable seating plan.
+Diplomatic banquet
 
----
+Avoid adversarial pairings
 
-## Iteration 6 — Weights & UX Controls
+College formals
 
-**Goal:** Allow the user to steer optimisation.
+Organise by year/group
 
-**Deliverables:**
+Singles event
 
-- Sliders for constraint weighting
-- UI structured around `profile` + `weights`
-- Metrics panel shown live
+Maximise meaningful clustering
 
-**Outcome:** Configurable optimisation rather than fixed rules.
+Future Opportunities:
 
----
+-   Indian weddings (very large tables)
+    
+-   Cruise ship dining systems
+    
+-   University halls
+    
+-   Military/state protocol
+    
 
-## Iteration 7 — Save Events & Persistence
+# 4\. Core Features
 
-**Goal:** Store and reload past events.
+## 4.1 Data Input
 
-**Deliverables:**
+-   CSV upload
+    
+-   Manual editing
+    
+-   Validation: duplicates, unresolved references, missing data
+    
 
-- Database storage (SQLite initially, Postgres later)
-- Persist:
-  - guests
-  - constraints
-  - table config
-  - solver results
-  - weight settings
-  - profile name
+### CSV Format (Wedding Default)
 
-**Outcome:** Usable as a real system, not a one-off tool.
+-   Name
+    
+-   Gender
+    
+-   Marital\_Status
+    
+-   Wants to sit next to
+    
+-   Must not sit next to
+    
 
----
+Backend resolves names → IDs.
 
-## Iteration 8 — Manual Overrides & Re-run
+## 4.2 Table Layout
 
-**Goal:** Blend automation + manual control.
+-   Round tables (circular adjacency)
+    
+-   Trestle tables (linear adjacency)
+    
+-   Configurable shapes, names, capacities
+    
+-   Future: U-shape, horseshoe, custom
+    
 
-**Deliverables:**
+## 4.3 Seating Logic & Constraints
 
-- Drag guests between seats
-- Lock seats
-- Re-run solver while respecting manual placements
+Constraint
 
-**Outcome:** Human edits integrated with algorithmic optimisation.
+Description
 
----
+**Must not sit next to**
 
-## Iteration 9 — Additional Seating Profiles
+Hard social restrictions
 
-**Goal:** Expand beyond weddings.
+**Wants to sit next to**
 
-**Candidate profiles:**
+Positive adjacency preference
 
-- `corporate_networking`
-- `formal_protocol`
-- `singles_event`
-- `conference_teams`
+**Couples handling**
 
-Each profile defines:
-- different scoring priorities
-- different behavioural defaults
+Penalty for splitting (or encourage split in some profiles)
 
-**Outcome:** Multi-vertical product.
+**Adjacency of singles**
 
----
+Encourage singles clustering
 
+**Gender alternation**
+
+Soft preference for balance
+
+**Side-based mixing**
+
+Bride/Groom, Company A/B
+
+**Tags & attributes**
+
+Family, team, VIP, department
+
+# 5\. Scoring Engine
+
+## 5.1 Default Weight-Based Scoring
+
+Lowest score wins.
+
+```
+Score = (
+    mustNotWeight           * mustNotViolations,
+   -wantsWeight             * wantsSatisfied,
+   -adjacentSinglesWeight   * adjacentSingles,
+   -sameGenderAdjWeight     * sameGenderAdjacencies,
+   -alternatingTablesWeight * alternatingTables,
+    splitCouplesWeight      * splitCouples   # +ve or -ve based on profile
+)
+```
+
+## 5.2 Priorities (Wedding Default)
+
+1.  Minimise must-not violations
+    
+2.  Maximise wants
+    
+3.  Encourage singles adjacency
+    
+4.  Encourage alternating gender
+    
+5.  Penalise split couples
+    
+
+# 6\. Data Models
+
+## 6.1 Guest
+
+```json
+{
+  "id": "g1",
+  "name": "Charlotte",
+  "gender": "Female",
+  "maritalStatus": "Married to Nick",
+  "wantsToSitNextTo": ["g1"],
+  "mustNotSitNextTo": [],
+  "tags": ["VIP"],
+  "attributes": {
+    "side": "bride",
+    "department": "Legal"
+  }
+}
+```
+
+## 6.2 Table
+
+```json
+{
+  "id": "t1",
+  "name": "Table 1",
+  "shape": "round",
+  "capacity": 10
+}
+```
+
+## 6.3 Seating Plan Output
+
+```json
+{
+  "tables": [
+    {
+      "tableId": "t1",
+      "seats": [
+        { "seatIndex": 0, "guestId": "g1" }
+      ]
+    }
+  ],
+  "metrics": {
+    "mustNotViolations": 0,
+    "wantsSatisfied": 1,
+    "adjacentSingles": 0,
+    "sameGenderAdjacencies": 1,
+    "alternatingTables": 1,
+    "splitCouples": 0
+  },
+  "attemptsMade": 214,
+  "profileUsed": "wedding_default"
+}
+```
+
+# 7\. Architecture
+
+## 7.1 Global Architecture
+
+```
+Next.js Frontend
+      ↓
+FastAPI Backend
+      ↓
+Python Solver (pure, stateless, deterministic)
+```
+
+## 7.2 Frontend
+
+-   React / Next.js
+    
+-   CSV upload & export
+    
+-   Guest editor
+    
+-   Table config UI
+    
+-   Weight sliders
+    
+-   SVG seating visualization
+    
+
+## 7.3 Backend (FastAPI)
+
+-   `/api/seating/generate`
+    
+-   `/api/guests/import-csv`
+    
+-   `/api/health`
+    
+-   Does **not** contain seating logic — delegates to solver
+    
+
+## 7.4 Python Solver
+
+-   Stateless
+    
+-   No wedding assumptions
+    
+-   Profiles control scoring priorities
+    
+-   Deterministic with optional seed
+    
+
+# 8\. Visual Output
+
+-   Round and trestle SVG tables
+    
+-   Seat arcs / positions
+    
+-   Guest colours by gender
+    
+-   Tooltips showing attributes/tags
+    
+-   Debug modes showing adjacency pairs
+    
+
+Exports:
+
+-   CSV
+    
+-   Browser-based PDF
+    
+-   Future: vector PDF generation
+    
+
+# 9\. Non-Functional Requirements
+
+Requirement
+
+Target
+
+Solve speed
+
+300 guests < 10 seconds
+
+Determinism
+
+Seed produces repeatability
+
+Privacy
+
+All data deletable; no AI storage
+
+Extensibility
+
+Profiles fully modular
+
+Reliability
+
+Solver never drops guests silently
+
+# 10\. Risks & Mitigations
+
+Risk
+
+Mitigation
+
+Unsatisfiable constraints
+
+Solver returns conflict report
+
+UX overwhelm
+
+Keep solver-first; UI layered gradually
+
+Competitors using AI
+
+Market “transparent optimisation, not AI”
+
+Manual data entry pain
+
+CSV mapping, templates, autofill
+
+# 11\. Development Roadmap (Merged & Updated)
+
+## **Iteration 1 — Solver Module (Standalone)**
+
+-   Core models
+    
+-   `solve()`
+    
+-   CLI
+    
+-   Unit tests
+    
+
+## **Iteration 2 — FastAPI Solver API**
+
+-   `/generate` + `/health`
+    
+-   Weight support
+    
+-   Profile field
+    
+
+## **Iteration 3 — Minimal Frontend**
+
+-   JSON editor
+    
+-   Generate button
+    
+-   Raw output viewer
+    
+
+## **Iteration 4 — CSV Import (Wedding Adapter)**
+
+-   CSV parsing
+    
+-   Validation
+    
+-   Guests table editor
+    
+
+## **Iteration 5 — Visual Seating (SVG)**
+
+-   Round & trestle
+    
+-   Tooltips
+    
+-   Colouring
+    
+
+## **Iteration 6 — Weight Controls**
+
+-   Slider-driven optimisation
+    
+-   Live metrics panel
+    
+
+## **Iteration 7 — Save Events**
+
+-   SQLite → Postgres
+    
+-   Event model (guests, weights, tables, results)
+    
+-   List & load events
+    
+
+## **Iteration 8 — Manual Overrides**
+
+-   Drag & drop guests
+    
+-   Locking mechanism
+    
+-   Re-run solver respecting frozen seats
+    
+
+## **Iteration 9 — Additional Profiles**
+
+-   Corporate networking
+    
+-   Formal protocol
+    
+-   Singles mixer
+    
+-   Conference group mixing
+    
+
+# 12\. Brand Promise
+
+ArrangeIQ delivers **intelligent**, **transparent**, and **precise** seating optimisation—balancing human relationships with mathematical clarity.
